@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jayymall.mappers.googleChartMapper">
+
+	<!-- 1차 카테고리별 매출(전체)-->
+	<select id="primaryChart" resultType="GoogleChartVO">
+		select c.cat_name primary_cd, sum(d.product_amount * d.ord_price) sales_p
+		from product_tbll p, ord_detail_tbl d, (select p.cat_name, c.cat_code from category_tbl c, category_tbl p where c.cat_parcode=p.cat_code ) c
+		where p.product_num=d.product_num
+		    and p.cat_code=c.cat_code
+		group by c.cat_name
+		order by c.cat_name
+	</select>
+	
+	<!-- 1차 카테고리 별 매출 비율(월별) -->
+	<select id="primaryChartByMonth" resultType="GoogleChartVO" parameterType="Date">
+		select c.cat_name primary_cd, sum(d.product_amount * d.ord_price) sales_p
+		from product_tbl p, ord_detail_tbl d, (select p.cat_name, c.cat_code from category_tbl c, category_tbl p where c.cat_parcode=p.cat_code ) c,  order_tbl o
+		where p.product_num=d.product_num
+		    and p.cat_code=c.cat_code
+		    and o.ord_num=d.ord_num
+		    and TO_CHAR(o.ord_date, 'YYYY/MM') = TO_CHAR(#{ord_date}, 'YYYY/MM')
+		group by c.cat_name, TO_CHAR(o.ord_date, 'YYYY/MM')
+		order by c.cat_name
+	</select>
+	
+	
+	<!-- 2차 카테고리별 매출(카테고리명으로 출력. ex)소설/시)(전체) -->
+	<select id="secondaryChart" resultType="GoogleChartVO">
+		select c.cat_name secondary_cd, sum(sales) sales_s
+		from category_tbl c
+		inner join (select p.cat_code, sum(d.product_amount * d.ord_price) sales
+		            from product_tbl p, ord_detail_tbl d
+		            where p.product_num=d.product_num
+		            group by p.cat_code) a
+		on c.cat_code = a.cat_code
+		where c.cat_parcode != 400
+		group by c.cat_name
+	</select>
+	
+	<!-- 2차 카테고리 별 매출 비율(월별) -->
+	<select id="secondaryChartByMonth" resultType="GoogleChartVO" parameterType="Date">
+		select c.cat_name secondary_cd, sum(sales) sales_s
+		from category_tbl c
+		inner join (select p.cat_code cat_code, sum(d.product_amount * d.ord_price) sales, TO_CHAR(o.ord_date, 'YYYY/MM') order_date
+		            from product_tbl p, ord_detail_tbl d, order_tbl o
+		            where p.product_num=d.product_num
+		                and o.ord_num=d.ord_num
+		                and TO_CHAR(o.ord_date, 'YYYY/MM') = TO_CHAR(#{ord_date}, 'YYYY/MM')
+		            group by p.cat_code, TO_CHAR(o.ord_date, 'YYYY/MM')) a
+		on c.cat_code = a.cat_code
+		where c.cat_parcode != 400
+		group by c.cat_name
+	</select>
+	
+	
+	<!-- 월별 매출 -->
+	<select id="monthlyChart" resultType="GoogleChartVO" parameterType="Date">
+		select b.dt month, NVL(sum(a.sales), 0) monthly_sales     
+		from (select TO_CHAR(ord_date, 'YYYY/MM') month1, sum(ord_total_price) sales
+		        from order_tbl
+		        where ord_date between to_date(trunc(#{ord_date}, 'year')) and to_date(trunc(trunc(#{ord_date}, 'year') + 370, 'year'))
+		        group by TO_CHAR(ord_date, 'YYYY/MM')) a
+		right join
+				<![CDATA[
+		        (select to_char(add_months(trunc(#{ord_date}, 'year'), level-1),'YYYY/MM') as dt from dual
+		            connect by level <= 12)
+		            b
+				]]>
+		on a.month1 = b.dt
+		group by b.dt
+		order by b.dt
+	</select>
+
+	<!-- 매년 총 매출 (컬럼차트(vertical bar)) -->
+	<select id="yearlySales" resultType="GoogleChartVO">
+		select sum(ord_total_price) total, to_char(ord_date, 'YYYY') year
+		from order_tbl
+		group by to_char(ord_date, 'YYYY')
+		order by to_char(ord_date, 'YYYY')
+	</select>
+	
+</mapper>
